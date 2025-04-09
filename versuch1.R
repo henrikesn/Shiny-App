@@ -4,7 +4,7 @@ library(ggplot2)
 library(shinyBS) # for bsModal
 
 # define user interface
-
+#
 source("helpers.R")
 
 ui <- page_sidebar(
