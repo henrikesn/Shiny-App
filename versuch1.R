@@ -372,6 +372,19 @@ server <- function(input, output) {
   })
   
   #########################################################################################
+  
+  # effect sizes 
+  
+  effects <- eventReactive(input$run{
+    if (input$comparisons == "many-to-one comparisons") {
+      effectsizes_mto(simulated_data)
+    } else if (input$comparisons == "all pairwise comparisons") {
+      effectsizes_pw(simulated_data)
+    }
+  })
+  
+  
+  #########################################################################################
     
   # show average power results
     

@@ -3,6 +3,8 @@
 library(multcomp)
 library(dplyr)
 library(sandwich)
+library(effectsize)
+library(purrr)
 
 simulate_data <- function(n_group, n_samps, effect, std_list, n_sim){
   set.seed(123)
@@ -113,20 +115,116 @@ multiple_comp_H1_sandwich <- function(models, comparison) {
 }
 
 
+effectsizes_mto <- function(data) {
+  group_ids <- unique(data$group)
+  combinations <- setdiff(group_ids, "1")
+  
+  effectlist <- lapply(unique(data$sim_id), function(sim) {
+    
+    data_sub <- data%>%filter(hypothesis == 'H1', sim_id == sim)
+    
+    lapply(combinations, function(comb) {
+      
+      pair <- c("1", as.character(comb))
+      
+      data_sub_pair <- data_sub %>%
+        filter(group %in% pair) %>%
+        mutate(group = factor(group, levels = pair))
+      
+      cohen <- cohens_d(values ~ group, data = data_sub_pair)
+      
+      means_ref <- data_sub_pair %>%
+        filter(group == 1) %>%
+        summarise(mean_ref = mean(values))
+      
+      means_comp <- data_sub_pair %>%
+        filter(as.character(group) == as.character(pair[2])) %>%
+        summarise(mean_comp = mean(values))
+      
+      mean_diff <- means_comp$mean_comp - means_ref$mean_ref
+      
+      effects <- data.frame(
+        sim = sim,
+        ref = '1',
+        comp = pair[2],
+        mean_ref = means_ref$mean_ref,
+        mean_comp = means_comp$mean_comp,
+        mean_diff = abs(mean_diff),
+        cohens_d = abs(cohen$Cohens_d))
+    })
+   }) 
+
+  
+  temp <- unlist(effectlist, recursive = FALSE)
+  result <- bind_rows(temp)
+  
+  return(result)
+}
+
+effectsizes_pw <- function(data) {
+  
+  group_ids <- unique(data$group)
+  combinations <- combn(group_ids, 2, simplify = FALSE)
+  
+  effectlist <- lapply(unique(data$sim_id), function(sim) {  # list of list of data.frames
+    
+    data_sub <- data %>% filter(hypothesis == 'H1', sim_id == sim)
+    
+    lapply(combinations, function(pair) {
+      
+      data_sub_pair <- data_sub %>%
+        filter(group %in% pair) %>%
+        mutate(group = factor(group, levels = pair))
+      
+      cohen <- cohens_d(values ~ group, data = data_sub_pair)
+      
+      means_ref <- data_sub_pair %>%
+        filter(as.character(group) == as.character(pair[1])) %>%
+        summarise(mean_ref = mean(values))
+      
+      means_comp <- data_sub_pair %>%
+        filter(as.character(group) == as.character(pair[2])) %>%
+        summarise(mean_comp = mean(values))
+      
+      mean_diff = means_comp$mean_comp - means_ref$mean_ref
+      
+
+      effects <- data.frame(
+        sim = sim,
+        ref = pair[1],
+        comp = pair[2],
+        mean_ref = means_ref$mean_ref,
+        mean_comp = means_comp$mean_comp,
+        mean_diff = abs(mean_diff),
+        cohens_d = abs(cohen$Cohens_d)
+        
+      )
+ 
+    })
+  })
+  
+  temp <- unlist(effectlist, recursive = FALSE)
+  result <- bind_rows(temp)
+  
+  return(result)
+}
+  
 
 
-# n_group <- 5
-# n_samps <- 5
-# effect <- 0.2
-# std_list <- c(1,2,3,4,5)
-# test <- simulate_data(n_group, n_samps, effect, std_list)
-# 
-# models <- fit_models(test)
-# modelH0 <- models$H0
-# model1H0 <- modelH0[[1]]
-# 
-# #comp <- multiple_comp_H0(model1H0, "many-to-one comparisons")
-# 
-# versuch <- glht(model1H0, linfct = mcp(group = "Dunnett"))
-# p <- summary(versuch, test = adjusted(NULL))
-# p1 <- summary(versuch, test = adjusted("single-step"))
+##########################################################################
+
+
+n_group <- 5
+n_samps <- 5
+effect <- 0.2
+std_list <- c(1,2,3,4,5)
+n_sim <- 100
+test <- simulate_data(n_group, n_samps, effect, std_list, n_sim)
+
+data_H1 <- test%>%filter(hypothesis == 'H1')
+
+
+versuch <- effectsizes_pw(test)
+versuchmto <- effectsizes_mto(test)
+
+
