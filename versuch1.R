@@ -34,16 +34,10 @@ ui <- page_sidebar(
       max = 15, 
       step = 1
     ),
+    
+    uiOutput("samps_inputs"),
   
     uiOutput("sd_inputs"),
-  
-    sliderInput(
-     "samplesize",
-     "Set sample size per group",
-     min = 0,
-     max = 200,
-     value = 100
-    ),
     
     sliderInput(
       "effectsize",
@@ -60,7 +54,7 @@ ui <- page_sidebar(
       choices = list(
         "Yes",
         "No"
-      )
+      ), selected = "No"
     ),
   
     selectInput(
@@ -96,18 +90,35 @@ ui <- page_sidebar(
 
 server <- function(input, output) {
   
+  ########################################################################################
+  
+  # standard deviations and sample sizes 
   output$sd_inputs <- renderUI({
     num_groups <- input$num_groups
     
     input_list <- lapply(1:num_groups, function(i) {
       numericInput(paste0("sd_",i),
-                   paste("standard deviation for group", i, ":"),
+                   paste("standard deviation group", i, ":"),
                    value = 1, min = 0, step = 0.1)
     })
     
-      
     do.call(tagList, input_list) 
     })
+  
+  output$samps_inputs <- renderUI({
+    num_groups <- input$num_groups
+    
+    input_list <- lapply(1:num_groups, function(i) {
+      numericInput(paste0("samps_", i),
+                   paste("sample size group", i, ":"),
+                   value = 5, min = 0, step = 1)
+    })
+    
+    do.call(tagList, input_list)
+  })
+  
+  
+  #####################################################################################
   
   output$procedure_choices <- renderUI({
     req(input$comparisons)
@@ -229,10 +240,11 @@ server <- function(input, output) {
   # generation of data
   simulation <- eventReactive(input$run,{
     std_values <- sapply(1:input$num_groups, function(i) input[[paste0("sd_", i)]])
+    n_samps_values <- sapply(1:input$num_groups, function(i) input[[paste0("samps_", i)]])
     
     simulated_data <- simulate_data(
      n_group =  input$num_groups,
-     n_samps = input$samplesize,
+     n_samps_list = n_samps_values,
      effect = input$effectsize,
      std_list = std_values,
      n_sim = input$nsim

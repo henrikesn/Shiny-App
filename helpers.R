@@ -4,41 +4,44 @@ library(multcomp)
 library(dplyr)
 library(sandwich)
 library(effectsize)
-library(purrr)
+#library(purrr)
 
-simulate_data <- function(n_group, n_samps, effect, std_list, n_sim){
+simulate_data <- function(n_group, n_samps_list, effect, std_list, n_sim){
   set.seed(123)
   
   mean_H0 <- 3
   means_H1 <- mean_H0 + effect * seq(0, n_group-1) #!!!!!
   #print(means_H1)
-  
-  simulation_H0 <- as.vector(replicate(n_sim,
-                                       {rnorm(n_samps*n_group, 
-                                              mean = mean_H0, 
-                                              sd = rep(std_list, each = n_samps))}))
 
-  
-
-  simulation_H1 <- as.vector(replicate(n_sim, {
+  simulation_H0 <- unlist(replicate(n_sim, {
     unlist(lapply(1:n_group, function(g) {
-      rnorm(n_samps, mean = means_H1[g], sd = std_list[g])
+      
+      rnorm(n = n_samps_list[g], mean = mean_H0, sd = std_list[g])
+      
     }))
-  }))
+  }, simplify = FALSE))
+  
+  simulation_H1 <- unlist(replicate(n_sim, {
+    unlist(lapply(1:n_group, function(g) {
+      
+      rnorm(n = n_samps_list[g], mean = means_H1[g], sd = std_list[g])
+      
+    }))
+  }, simplify = FALSE))
   
   
-  group_labels <- rep(1:n_group, each = n_samps)
+  group_labels <- unlist(lapply(1:n_group, function(g) rep(g, each = n_samps_list[g])))
   
   group_labels_H0 <- rep(group_labels, times = n_sim)
   group_labels_H1 <- rep(group_labels, times = n_sim)
   
-
+  sim_ids <- rep(1:n_sim, each = sum(n_samps_list))
   
   data_H0 <- data.frame(
     values = simulation_H0,
     group = group_labels_H0,
     hypothesis = "H0",
-    sim_id = rep(1:n_sim, each = n_group * n_samps)
+    sim_id = sim_ids
   )
   
   
@@ -46,7 +49,7 @@ simulate_data <- function(n_group, n_samps, effect, std_list, n_sim){
     values = simulation_H1,
     group = group_labels_H1,
     hypothesis = "H1",
-    sim_id = rep(1:n_sim, each = n_group * n_samps)
+    sim_id = sim_ids
   )
   
   
@@ -212,15 +215,17 @@ effectsizes_pw <- function(data) {
   
 
 
+
 ##########################################################################
 
 
 n_group <- 5
-n_samps <- 5
+#n_samps <- 5
+n_samps_list <- c(2,3,4,5,6)
 effect <- 0.2
 std_list <- c(1,2,3,4,5)
 n_sim <- 100
-test <- simulate_data(n_group, n_samps, effect, std_list, n_sim)
+test <- simulate_data(n_group, n_samps_list, effect, std_list, n_sim)
 
 data_H1 <- test%>%filter(hypothesis == 'H1')
 
