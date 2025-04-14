@@ -42,7 +42,7 @@ ui <- page_sidebar(
      "Set sample size per group",
      min = 0,
      max = 200,
-     value = 32
+     value = 100
     ),
     
     sliderInput(
@@ -50,7 +50,7 @@ ui <- page_sidebar(
       "Set effect size",
       min = 0,
       max = 5,
-      value = 0.2,
+      value = 0.5,
       step = 0.1
     ),
     
@@ -85,7 +85,9 @@ ui <- page_sidebar(
   mainPanel(
     plotOutput("powerplot"),
     plotOutput("fwerplot"),
-    plotOutput("pcerrorplot")
+    plotOutput("pcerrorplot"),
+    plotOutput("cohensd"),
+    plotOutput("meandiff")
     
   )
 )
@@ -375,12 +377,13 @@ server <- function(input, output) {
   
   # effect sizes 
   
-  effects <- eventReactive(input$run{
+  effects <- eventReactive(input$run, {
     if (input$comparisons == "many-to-one comparisons") {
-      effectsizes_mto(simulated_data)
+      effectsizes_mto(simulation())
     } else if (input$comparisons == "all pairwise comparisons") {
-      effectsizes_pw(simulated_data)
+      effectsizes_pw(simulation())
     }
+    
   })
   
   
@@ -443,6 +446,36 @@ server <- function(input, output) {
             x = "Multiple Comparison Procedures",
             y = "Family-wise error rate") +
        theme_minimal()
+   })
+   
+   #########################################################################################################
+   
+   # show effect sizes 
+   
+   output$cohensd <- renderPlot({
+     effects <- effects()
+     req(effects)
+     
+     ggplot(effects, aes(x = cohens_d)) +
+       geom_histogram(aes(y = after_stat(density)), binwidth = 0.1) +
+       labs(title = "Cohen's d", 
+            x = "Cohen's d") + 
+       facet_wrap(~ comparison) +
+       theme_minimal()
+
+   })
+   
+   output$meandiff <- renderPlot({
+     effects <- effects()
+     req(effects)
+
+     ggplot(effects, aes(x = mean_diff)) +
+       geom_histogram(aes(y = after_stat(density)), binwidth = 0.1) +
+       labs(title = "Difference between mean values",
+            x = "Difference between mean values") + 
+       facet_wrap(~ comparison) +
+       theme_minimal()
+     
    })
     
 }

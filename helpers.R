@@ -150,7 +150,8 @@ effectsizes_mto <- function(data) {
         mean_ref = means_ref$mean_ref,
         mean_comp = means_comp$mean_comp,
         mean_diff = abs(mean_diff),
-        cohens_d = abs(cohen$Cohens_d))
+        cohens_d = abs(cohen$Cohens_d),
+        comparison = paste0(pair[2], " vs 1"))
     })
    }) 
 
@@ -196,8 +197,8 @@ effectsizes_pw <- function(data) {
         mean_ref = means_ref$mean_ref,
         mean_comp = means_comp$mean_comp,
         mean_diff = abs(mean_diff),
-        cohens_d = abs(cohen$Cohens_d)
-        
+        cohens_d = abs(cohen$Cohens_d),
+        comparison = paste0(pair[2], " vs ", pair[1])
       )
  
     })
