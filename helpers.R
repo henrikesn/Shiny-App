@@ -118,9 +118,9 @@ multiple_comp_H1_sandwich <- function(models, comparison) {
 }
 
 
-effectsizes_mto <- function(data) {
+effectsizes_mto <- function(data, ref, effect) {
   group_ids <- unique(data$group)
-  combinations <- setdiff(group_ids, "1")
+  combinations <- setdiff(group_ids, ref)
   
   effectlist <- lapply(unique(data$sim_id), function(sim) {
     
@@ -128,16 +128,17 @@ effectsizes_mto <- function(data) {
     
     lapply(combinations, function(comb) {
       
-      pair <- c("1", as.character(comb))
+      pair <- unique(c(as.character(ref), as.character(comb)))
       
       data_sub_pair <- data_sub %>%
         filter(group %in% pair) %>%
-        mutate(group = factor(group, levels = pair))
+        mutate(group = factor(as.character(group), levels = as.character(pair)))
+
       
       cohen <- cohens_d(values ~ group, data = data_sub_pair)
       
       means_ref <- data_sub_pair %>%
-        filter(group == 1) %>%
+        filter(group == as.character(ref)) %>%
         summarise(mean_ref = mean(values))
       
       means_comp <- data_sub_pair %>%
@@ -146,15 +147,19 @@ effectsizes_mto <- function(data) {
       
       mean_diff <- means_comp$mean_comp - means_ref$mean_ref
       
+      true_mean_diff <- (as.integer(pair[1]) - as.integer(pair[2])) * effect
+      
       effects <- data.frame(
         sim = sim,
-        ref = '1',
+        ref = pair[1],
         comp = pair[2],
         mean_ref = means_ref$mean_ref,
         mean_comp = means_comp$mean_comp,
         mean_diff = abs(mean_diff),
         cohens_d = abs(cohen$Cohens_d),
-        comparison = paste0(pair[2], " vs 1"))
+        comparison = paste0(pair[2], " vs ", pair[1]),
+        true_mean_diff = abs(true_mean_diff) 
+        )
     })
    }) 
 
@@ -165,7 +170,7 @@ effectsizes_mto <- function(data) {
   return(result)
 }
 
-effectsizes_pw <- function(data) {
+effectsizes_pw <- function(data, effect) {
   
   group_ids <- unique(data$group)
   combinations <- combn(group_ids, 2, simplify = FALSE)
@@ -178,7 +183,7 @@ effectsizes_pw <- function(data) {
       
       data_sub_pair <- data_sub %>%
         filter(group %in% pair) %>%
-        mutate(group = factor(group, levels = pair))
+        mutate(group = factor(as.character(group), levels = as.character(pair)))
       
       cohen <- cohens_d(values ~ group, data = data_sub_pair)
       
@@ -192,6 +197,8 @@ effectsizes_pw <- function(data) {
       
       mean_diff = means_comp$mean_comp - means_ref$mean_ref
       
+      true_mean_diff = (as.numeric(pair[1]) - as.numeric(pair[2])) * effect
+      
 
       effects <- data.frame(
         sim = sim,
@@ -201,7 +208,8 @@ effectsizes_pw <- function(data) {
         mean_comp = means_comp$mean_comp,
         mean_diff = abs(mean_diff),
         cohens_d = abs(cohen$Cohens_d),
-        comparison = paste0(pair[2], " vs ", pair[1])
+        comparison = paste0(pair[2], " vs ", pair[1]),
+        true_mean_diff = abs(true_mean_diff)
       )
  
     })
@@ -220,17 +228,17 @@ effectsizes_pw <- function(data) {
 
 
 n_group <- 5
-#n_samps <- 5
 n_samps_list <- c(2,3,4,5,6)
 effect <- 0.2
 std_list <- c(1,2,3,4,5)
 n_sim <- 100
+ref <- 3
 test <- simulate_data(n_group, n_samps_list, effect, std_list, n_sim)
 
 data_H1 <- test%>%filter(hypothesis == 'H1')
 
 
-versuch <- effectsizes_pw(test)
-versuchmto <- effectsizes_mto(test)
+versuch <- effectsizes_pw(test, 0.5)
+versuchmto <- effectsizes_mto(test,2, 0.5)
 
 

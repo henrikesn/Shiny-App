@@ -4,7 +4,7 @@ library(ggplot2)
 library(shinyBS) # for bsModal
 
 # define user interface
-#
+
 source("helpers.R")
 
 ui <- page_sidebar(
@@ -67,7 +67,8 @@ ui <- page_sidebar(
     selected = "all pairwise comparisons"
   ),
   
- 
+  uiOutput("reference_group"),
+  
   uiOutput("procedure_choices"),
   withMathJax(),
 
@@ -90,7 +91,7 @@ ui <- page_sidebar(
 
 server <- function(input, output) {
   
-  ########################################################################################
+  ########################################################################################################################################
   
   # standard deviations and sample sizes 
   output$sd_inputs <- renderUI({
@@ -117,8 +118,23 @@ server <- function(input, output) {
     do.call(tagList, input_list)
   })
   
+  ##########################################################################################################################################
   
-  #####################################################################################
+  # choose reference group 
+  
+  output$reference_group <- renderUI({
+    req(input$comparisons)
+    
+    if (input$comparisons == "many-to-one comparisons") {
+      num_groups <- input$num_groups
+      group_choices <- c(1:num_groups)
+      
+      selectInput("reference_group", "Choose the reference group:",
+                                    choices = group_choices,
+                  selected = group_choices[1])
+    }
+  })
+  ###########################################################################################################################################
   
   output$procedure_choices <- renderUI({
     req(input$comparisons)
@@ -237,6 +253,8 @@ server <- function(input, output) {
     "Step-Down Dunnett" = "free" 
   )
   
+  ##########################################################################################################################################
+  
   # generation of data
   simulation <- eventReactive(input$run,{
     std_values <- sapply(1:input$num_groups, function(i) input[[paste0("sd_", i)]])
@@ -254,16 +272,26 @@ server <- function(input, output) {
    return(simulated_data)
   })
   
-  #########################################################################################
+  ##########################################################################################################################################
   
   # generation of aov models
+  
   models <- reactive({
+    
+    simulated_data <- simulation()
+    
+    if (input$comparisons == "many-to-one comparisons") {
+      simulated_data$group <- relevel(simulated_data$group, ref = input$reference_group)
+    }
+    
     fit_models(simulation())
   })
   
   # generation of multiple comparisons (H0) (many-to-one or all pairwise)
+  
   results_H0 <- reactive({ 
     req(models())
+
     if (input$sandwich == "Yes") {
       multiple_comp_H0_sandwich(models(), input$comparisons)
     } else {
@@ -272,6 +300,7 @@ server <- function(input, output) {
   })
   
   # generation of multiple comparisons (H1) (many-to-one or all pairwise)
+  
   results_H1 <- reactive({
     req(models())
     if (input$sandwich == "Yes") {
@@ -314,6 +343,7 @@ server <- function(input, output) {
   #########################################################################################
   
   # average power
+  
   power_results <- eventReactive(input$run, {
     
     results <- procedure_results()
@@ -337,10 +367,31 @@ server <- function(input, output) {
     return(average_power)
     
   })
+
   
+  # family-wise error rate
   
+  fwer_results <- eventReactive(input$run, {
+    
+    results <- procedure_results()
+    results_H0 <- results$H0
+    
+    
+    fwer_list <- list()
+    
+    for (method in selected_methods()) {
+      method_results <- results_H0[[method]]
+      reject_any <- sapply(method_results, function(r) {
+        any(r$test$pvalues < 0.05)})
+      fwer_list[[method]] <- mean(reject_any)  
+    
+    }
+    
+    return(fwer_list)
+  })
   
   # per-comparison error rate (expected proportion of type I errors)
+  
   pc_error_results <- eventReactive(input$run, {
     
     results <- procedure_results()
@@ -364,36 +415,17 @@ server <- function(input, output) {
   })
   
   
-  
-  # family-wise error rate
-  fwer_results <- eventReactive(input$run, {
-    
-    results <- procedure_results()
-    results_H0 <- results$H0
-    
-    
-    fwer_list <- list()
-    
-    for (method in selected_methods()) {
-      method_results <- results_H0[[method]]
-      reject_any <- sapply(method_results, function(r) {
-        any(r$test$pvalues < 0.05)})
-      fwer_list[[method]] <- mean(reject_any)  
-    
-    }
-    
-    return(fwer_list)
-  })
-  
   #########################################################################################
   
   # effect sizes 
   
   effects <- eventReactive(input$run, {
+    req(input$effectsize)
+
     if (input$comparisons == "many-to-one comparisons") {
-      effectsizes_mto(simulation())
+      effectsizes_mto(simulation(), input$reference_group, effect = input$effectsize)
     } else if (input$comparisons == "all pairwise comparisons") {
-      effectsizes_pw(simulation())
+      effectsizes_pw(simulation(), effect = input$effectsize)
     }
     
   })
@@ -416,7 +448,7 @@ server <- function(input, output) {
       
       ggplot(power_df, aes(x = Procedure, y = Average_Power)) +
         geom_bar(stat = "identity", position = "dodge") +
-        labs(title = "Multiple Comparisons Procedures: Average Power",
+        labs(title = "Multiple Comparison Procedures: Average Power",
              x = "Multiple Comparison Procedures",
              y = "Average Power") +
         theme_minimal() 
@@ -435,7 +467,7 @@ server <- function(input, output) {
      
      ggplot(pc_error_df, aes(x = Procedure, y = PC_Error)) +
        geom_bar(stat = "identity", position = "dodge") +
-       labs(title = "Multiple Comparisons Procedures: Per-comparison error rate",
+       labs(title = "Multiple Comparison Procedures: Per-comparison error rate",
             x = "Multiple Comparison Procedures",
             y = "Per-comparison error rate") +
        theme_minimal()
@@ -454,7 +486,7 @@ server <- function(input, output) {
      
      ggplot(fwer_df, aes(x = Procedure, y = FWER)) +
        geom_bar(stat = "identity", position = "dodge") +
-       labs(title = "Multiple Comparisons Procedures: Family-wise error rate",
+       labs(title = "Multiple Comparison Procedures: Family-wise error rate",
             x = "Multiple Comparison Procedures",
             y = "Family-wise error rate") +
        theme_minimal()
@@ -471,7 +503,7 @@ server <- function(input, output) {
      ggplot(effects, aes(x = cohens_d)) +
        geom_histogram(aes(y = after_stat(density)), binwidth = 0.1) +
        labs(title = "Cohen's d", 
-            x = "Cohen's d") + 
+            x = "Cohen's d") +
        facet_wrap(~ comparison) +
        theme_minimal()
 
@@ -480,9 +512,15 @@ server <- function(input, output) {
    output$meandiff <- renderPlot({
      effects <- effects()
      req(effects)
+     
+     vline_data <- effects %>%
+       distinct(comparison, true_mean_diff)
+     
+     #print(vline_data)
 
      ggplot(effects, aes(x = mean_diff)) +
        geom_histogram(aes(y = after_stat(density)), binwidth = 0.1) +
+       geom_vline(data = vline_data, aes(xintercept = true_mean_diff), linetype = "dashed") +
        labs(title = "Difference between mean values",
             x = "Difference between mean values") + 
        facet_wrap(~ comparison) +
