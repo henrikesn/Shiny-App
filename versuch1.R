@@ -354,15 +354,13 @@ server <- function(input, output) {
     for (method in selected_methods()) {
       p <- sapply(results_H1[[method]], function(y) {
         mean(y$test$pvalues < 0.05)})
-      #print(p)
+
       power_list[[method]] <- p
       
       
     }
-    #print(power_list)
     
     average_power <- lapply(power_list, function(l) mean(unlist(l)))
-    #print(average_power)
     
     return(average_power)
     
@@ -406,10 +404,8 @@ server <- function(input, output) {
       
     }
     
-    #print(error_list)
     pc_error <- lapply(error_list, function(vec) mean(unlist(vec)))
-    #print(pc_error)
-    
+
     return(pc_error)
     
   })
@@ -420,12 +416,26 @@ server <- function(input, output) {
   # effect sizes 
   
   effects <- eventReactive(input$run, {
-    req(input$effectsize)
+    
+    std_values <- sapply(1:input$num_groups, function(i) input[[paste0("sd_", i)]])
+    n_samps_values <- sapply(1:input$num_groups, function(i) input[[paste0("samps_", i)]])
+  
+    req(simulation(), input$effectsize)
 
     if (input$comparisons == "many-to-one comparisons") {
-      effectsizes_mto(simulation(), input$reference_group, effect = input$effectsize)
+      effectsizes_mto(
+        data = simulation(), 
+        ref = input$reference_group, 
+        effect = input$effectsize, 
+        n_samps_list = n_samps_values, 
+        std_list = std_values)
+      
     } else if (input$comparisons == "all pairwise comparisons") {
-      effectsizes_pw(simulation(), effect = input$effectsize)
+      effectsizes_pw(
+        data = simulation(), 
+        effect = input$effectsize, 
+        n_samps_list = n_samps_values, 
+        std_list = std_values)
     }
     
   })
@@ -443,8 +453,6 @@ server <- function(input, output) {
         Procedure = names(power),
        Average_Power = unlist(power)
       )
-      
-      #print(power_df)
       
       ggplot(power_df, aes(x = Procedure, y = Average_Power)) +
         geom_bar(stat = "identity", position = "dodge") +
@@ -500,8 +508,12 @@ server <- function(input, output) {
      effects <- effects()
      req(effects)
      
+     vline_data <- effects %>%
+       distinct(comparison, true_cohen)
+     
      ggplot(effects, aes(x = cohens_d)) +
        geom_histogram(aes(y = after_stat(density)), binwidth = 0.1) +
+       geom_vline(data = vline_data, aes(xintercept = true_cohen), linetype = "dashed") +
        labs(title = "Cohen's d", 
             x = "Cohen's d") +
        facet_wrap(~ comparison) +
@@ -515,8 +527,6 @@ server <- function(input, output) {
      
      vline_data <- effects %>%
        distinct(comparison, true_mean_diff)
-     
-     #print(vline_data)
 
      ggplot(effects, aes(x = mean_diff)) +
        geom_histogram(aes(y = after_stat(density)), binwidth = 0.1) +
